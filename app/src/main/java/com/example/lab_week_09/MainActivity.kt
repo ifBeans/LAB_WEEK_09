@@ -37,9 +37,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.room.util.copy
 import com.example.lab_week_09.ui.theme.LAB_WEEK_09Theme
+import com.example.lab_week_09.ui.theme.MoshiHelper
 import com.example.lab_week_09.ui.theme.OnBackgroundItemText
 import com.example.lab_week_09.ui.theme.OnBackgroundTitleText
 import com.example.lab_week_09.ui.theme.PrimaryTextButton
+import com.squareup.moshi.JsonClass
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,6 +68,7 @@ class MainActivity : ComponentActivity() {
 }
 
 //Declare a data class called Student
+@JsonClass(generateAdapter = true)
 data class Student(
     var name: String
 )
@@ -146,12 +149,16 @@ fun Home(
         inputField = inputField.value, // ✨ FIX: Pass the value inside the state
         onInputValueChange = { input -> inputField.value = inputField.value.copy(name = input) },
         onButtonClick = {
-            if (inputField.value.name.isNotBlank()) {
-                listData.add(inputField.value)
-            }
+            listData.add(inputField.value)
             inputField.value = inputField.value.copy(name = "")
         },
-        navigateFromHomeToResult = { navigateFromHomeToResult(listData.toList().toString()) }
+        navigateFromHomeToResult = {
+            // Convert List<Student> to JSON string
+            val jsonList = MoshiHelper.listStudentAdapter.toJson(listData) // Use the Adapter to serialize
+
+            // Pass the JSON string to the navigation function
+            navigateFromHomeToResult(jsonList)
+        }
     )
 }
 
@@ -210,14 +217,14 @@ fun HomeContent(
                 )
 
                 Row {
+                    PrimaryTextButton(text = stringResource(id = R.string.button_click),
+                        onClick = { onButtonClick() },
+                        enabled = inputField.name.isNotBlank()
+                    )
                     PrimaryTextButton(text = stringResource(id =
-                        R.string.button_click)) {
-                        onButtonClick()
-                    }
-                    PrimaryTextButton(text = stringResource(id =
-                        R.string.button_navigate)) {
-                        navigateFromHomeToResult()
-                    }
+                        R.string.button_navigate),
+                        onClick = { navigateFromHomeToResult() }
+                    )
                 }
             }
         }
@@ -248,14 +255,35 @@ fun HomeContent(
 //ResultContent accepts a String parameter called listData from the Home composable
 //then displays the value of listData to the screen
 @Composable
-fun ResultContent(listData: String) {
-    Column(
-        modifier = Modifier
-            .padding(vertical = 4.dp)
-            .fillMaxSize(),
+fun ResultContent(listDataJson: String) {
+    // Deserialize the JSON string back into a List<Student>
+    val students: List<Student> = try {
+        MoshiHelper.listStudentAdapter.fromJson(listDataJson) ?: emptyList()
+    } catch (e: Exception) {
+        // Handle potential deserialization errors, e.g., print stack trace
+        emptyList()
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        //Here, we call the OnBackgroundItemText UI Element
-        OnBackgroundItemText(text = listData)
+        item {
+            Text(
+                text = "Submitted Student Names:",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
+
+        items(students) { student ->
+            Column(
+                modifier = Modifier.padding(vertical = 4.dp).fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Use your custom item text UI element
+                OnBackgroundItemText(text = student.name)
+            }
+        }
     }
 }
